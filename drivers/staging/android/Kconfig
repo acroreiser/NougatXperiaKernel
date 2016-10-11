@@ -1,0 +1,118 @@
+menu "Android"
+
+config ANDROID
+	bool "Android Drivers"
+	default N
+	---help---
+	  Enable support for various drivers needed on the Android platform
+
+if ANDROID
+
+config ANDROID_BINDER_IPC
+	bool "Android Binder IPC Driver"
+	default n
+
+config ASHMEM
+	bool "Enable the Anonymous Shared Memory Subsystem"
+	default n
+	depends on SHMEM || TINY_SHMEM
+	help
+	  The ashmem subsystem is a new shared memory allocator, similar to
+	  POSIX SHM but with different behavior and sporting a simpler
+	  file-based API.
+
+config ANDROID_PERSISTENT_RAM
+	bool
+	depends on HAVE_MEMBLOCK
+	select REED_SOLOMON
+	select REED_SOLOMON_ENC8
+	select REED_SOLOMON_DEC8
+
+config ANDROID_RAM_CONSOLE
+	bool "Android RAM buffer console"
+	depends on !S390 && !UML && HAVE_MEMBLOCK
+	select ANDROID_PERSISTENT_RAM
+	default n
+
+config PERSISTENT_TRACER
+	bool "Persistent function tracer"
+	depends on HAVE_FUNCTION_TRACER
+	select FUNCTION_TRACER
+	select ANDROID_PERSISTENT_RAM
+	help
+	  persistent_trace traces function calls into a persistent ram
+	  buffer that can be decoded and dumped after reboot through
+	  /sys/kernel/debug/persistent_trace.  It can be used to
+	  determine what function was last called before a reset or
+	  panic.
+
+	  If unsure, say N.
+
+config ANDROID_TIMED_OUTPUT
+	bool "Timed output class driver"
+	default y
+
+config ANDROID_TIMED_GPIO
+	tristate "Android timed gpio driver"
+	depends on GENERIC_GPIO && ANDROID_TIMED_OUTPUT
+	default n
+
+config ANDROID_LOW_MEMORY_KILLER
+	bool "Android Low Memory Killer"
+	default N
+	---help---
+	  Register processes to be killed when memory is low
+
+config ANDROID_LOW_MEMORY_KILLER_AUTODETECT_OOM_ADJ_VALUES
+	bool "Android Low Memory Killer: detect oom_adj values"
+	depends on ANDROID_LOW_MEMORY_KILLER
+	default y
+	---help---
+	  Detect oom_adj values written to
+	  /sys/module/lowmemorykiller/parameters/adj and convert them
+	  to oom_score_adj values.
+
+source "drivers/staging/android/switch/Kconfig"
+
+config ANDROID_LMK_ADJ_RBTREE
+ 	bool "Use RBTREE for Android Low Memory Killer"
+ 	depends on ANDROID_LOW_MEMORY_KILLER
+ 	default y
+ 	---help---
+ 	  Use oom_score_adj rbtree to select the best process to kill
+ 	  when system in low memory status.
+
+config LMK_LOCK_TREBUCHET
+ 	bool "Lock Trebuchet in memory"
+ 	depends on ANDROID_LOW_MEMORY_KILLER
+ 	default n
+ 	---help---
+ 	  Lock Trebuchet launcher in memory and protect it from killing by LowMemoryKiller.
+	  Launcher is a part of Android UI. Unloading launcher from memory is unwanted for user experience. 
+	  Better don't kill it. This option locks Trebuchet in memory at runtime and protect it from killing by LowMemoryKiller.
+
+config LMK_LOCK_NOVA
+ 	bool "Lock Nova Launcher in memory"
+ 	depends on ANDROID_LOW_MEMORY_KILLER
+ 	default n
+ 	---help---
+ 	  Lock Nova Launcher in memory and protect it from killing by LowMemoryKiller.
+	  Launcher is a part of Android UI. Unloading launcher from memory is unwanted for user experience. 
+	  Better don't kill it. This option locks Nova Launcher in memory at runtime and protect it from killing by LowMemoryKiller.
+
+ 	  Nova is the highly customizable, performance driven, home screen replacement.
+  	  Accept no substitutes! Nova Launcher is the top launcher for modern Android, embracing full Material Design throughout.
+ 	  Nova Launcher replaces your home screen with one you control and can customize. Change icons, layouts, animations and more.
+
+config LMK_LOCK_GMS
+ 	bool "Lock Google Play Services in memory"
+ 	depends on ANDROID_LOW_MEMORY_KILLER
+ 	default n
+ 	---help---
+ 	  Google Play Services is a framework, which provides Google Services API for applications and MUST stay background.
+	  At the same time GMS is a huge application, which utilize ~20M memory at runtime, but very heavy to launch/restart for legacy devices.
+	  Better don't kill it. This option locks Google Play Services in memory at runtime and protect it from killing by LowMemoryKiller.
+
+endif # if ANDROID
+
+endmenu

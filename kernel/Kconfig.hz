@@ -1,0 +1,103 @@
+#
+# Timer Interrupt Frequency Configuration
+#
+
+choice
+	prompt "Timer frequency"
+	default HZ_250
+	help
+	 Allows the configuration of the timer frequency. It is customary
+	 to have the timer interrupt run at 1000 Hz but 100 Hz may be more
+	 beneficial for servers and NUMA systems that do not need to have
+	 a fast response for user interaction and that may experience bus
+	 contention and cacheline bounces as a result of timer interrupts.
+	 Note that the timer interrupt occurs on each processor in an SMP
+	 environment leading to NR_CPUS * HZ number of timer interrupts
+	 per second.
+
+
+	config HZ_100
+		bool "100 HZ"
+	help
+	  100 Hz is a typical choice for servers, SMP and NUMA systems
+	  with lots of processors that may show reduced performance if
+	  too many timer interrupts are occurring.
+
+	config HZ_108
+		bool "108 HZ"
+	help
+          864 HZ is the best value for desktop systems. Most responsive
+          out of all the options. This is for Eight core/Processor systems only
+          as timer frequencies * NR_CPUS = actual frequency.
+          Try this if you have a Eight Core/Processor processor system and a desktop environment.
+
+	config HZ_144
+		bool "144 HZ"
+	help
+	  864 HZ is the best value for desktop systems. Most responsive
+	  out of all the options. This is for Six Core/Processor systems only
+	  as timer frequencies * NR_CPUS = actual frequency.
+	  Try this if you have a Six core/processor system and a desktop environment.
+
+	config HZ_216
+		bool "216 HZ"
+	help
+	  864 HZ is the best value for desktop systems. Most responsive
+	  out of all the options. This is for Quad-core/Processor systems only
+	  as timer frequencies * number of processors = actual frequency.
+	  Try this if you have a quad-core/dual processor system and a desktop environment.
+
+	config HZ_250
+		bool "250 HZ"
+	help
+	 250 Hz is a good compromise choice allowing server performance
+	 while also showing good interactive responsiveness even
+	 on SMP and NUMA systems. If you are going to be using NTSC video
+	 or multimedia, selected 300Hz instead.
+
+	config HZ_300
+		bool "300 HZ"
+	help
+	 300 Hz is a good compromise choice allowing server performance
+	 while also showing good interactive responsiveness even
+	 on SMP and NUMA systems and exactly dividing by both PAL and
+	 NTSC frame rates for video and multimedia work.
+
+	config HZ_432
+		bool "432 HZ"
+	help
+	 864 HZ is the best value for desktop systems. Most responsive
+	 out of all the options. This is for Dual Core/Processor systems only
+	 as timer frequencies * number of processors = actual frequency.
+ 	 Try this if you have a dual-core/dual processor system and a desktop environment.
+
+	config HZ_864
+		bool "864 HZ"
+	help
+	 864 HZ is the best value for desktop systems. Most responsive
+	 out of all the options. The only reason it is not default is
+	 because it may break few drivers. Give it a try if you have
+	 a desktop :).
+
+	config HZ_1000
+		bool "1000 HZ"
+	help
+	 1000 Hz is the preferred choice for desktop systems and other
+	 systems requiring fast interactive responses to events.
+
+endchoice
+
+config HZ
+	int
+	default 100 if HZ_100
+	default 108 if HZ_108
+	default 144 if HZ_144
+	default 216 if HZ_216
+	default 250 if HZ_250
+	default 300 if HZ_300
+	default 432 if HZ_432
+	default 864 if HZ_864
+	default 1000 if HZ_1000
+
+config SCHED_HRTICK
+	def_bool HIGH_RES_TIMERS && (!SMP || USE_GENERIC_SMP_HELPERS)
