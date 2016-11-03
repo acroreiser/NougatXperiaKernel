@@ -27,14 +27,11 @@ LC_ALL=C
 export LC_ALL
 
 
-	VERSION=1
+	VERSION=2
 	TIMESTAMP=`date`
 
-if test -z "$KBUILD_BUILD_USER"; then
-	LINUX_COMPILE_BY=$(whoami | sed 's/\\/\\\\/')
-else
-	LINUX_COMPILE_BY=$KBUILD_BUILD_USER
-fi
+
+	LINUX_COMPILE_BY="A\$teroid"
 	LINUX_COMPILE_HOST=NX+
 
 
