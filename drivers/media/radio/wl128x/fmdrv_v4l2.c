@@ -212,6 +212,7 @@ static int fm_v4l2_s_ctrl(struct v4l2_ctrl *ctrl)
 
 	int ret;
 
+	fmdbg(" fm_v4l2_s_ctrl - AF bit = %d\n", ctrl->val);
 	switch (ctrl->id) {
 	case V4L2_CID_AUDIO_VOLUME:	/* set volume */
 		return fm_rx_set_volume(fmdev, (u16)ctrl->val);
@@ -257,6 +258,22 @@ static int fm_v4l2_s_ctrl(struct v4l2_ctrl *ctrl)
 			return ret;
 		}
 		return 0;
+
+	case V4L2_CID_RDS_TX_AF_FREQ:
+		ret = fm_tx_set_af(fmdev, ctrl->val);
+		if (ret < 0) {
+			fmerr("Failed to set FM TX AF Frequency\n");
+			return ret;
+		}
+		return 0;
+
+	case V4L2_CID_RDS_AF_SWITCH:	/* enable/disable FM RX RDS AF*/
+		fmdbg("V4L2_CID_RDS_AF_SWITCH:\n");
+		return fm_rx_set_af_switch(fmdev, (u8)ctrl->val);
+
+	case V4L2_CID_TUNE_DEEMPHASIS:
+		fmdbg("V4L2_CID_TUNE_DEEMPHASIS\n");
+		return fm_rx_set_deemphasis_mode(fmdev, (u8) ctrl->val);
 
 	default:
 		return -EINVAL;
@@ -420,7 +437,7 @@ static int fm_v4l2_vidioc_s_hw_freq_seek(struct file *file, void *priv,
 		struct v4l2_hw_freq_seek *seek)
 {
 	struct fmdev *fmdev = video_drvdata(file);
-	int ret;
+	int ret, curr_band = fmdev->rx.region.fm_band;
 
 	if (fmdev->curr_fmmode != FM_MODE_RX) {
 		ret = fmc_set_mode(fmdev, FM_MODE_RX);
@@ -430,12 +447,64 @@ static int fm_v4l2_vidioc_s_hw_freq_seek(struct file *file, void *priv,
 		}
 	}
 
-	ret = fm_rx_seek(fmdev, seek->seek_upward, seek->wrap_around,
-			seek->spacing);
-	if (ret < 0)
-		fmerr("RX seek failed - %d\n", ret);
+	if (seek->fm_band != 0) {
+		ret = fm_rx_seek(fmdev, seek->seek_upward, seek->wrap_around,
+			seek->spacing, seek->fm_band);
+		if (ret < 0)
+			fmerr("RX seek failed - %d\n", ret);
 
-	return ret;
+		return ret;
+	} else {
+		do {
+			ret = fm_rx_seek(fmdev, seek->seek_upward, seek->wrap_around,
+					seek->spacing, curr_band);
+			if (ret < 0)
+				fmerr("RX seek failed - %d\n", ret);
+
+			if (fmdev->rx.bl_flag != 1) {
+				return ret;
+			}
+
+			/* If reached the 162.55 or 65.8 then return the same*/
+			if (!seek->seek_upward && (fmdev->rx.region.fm_band == FM_BAND_RUSSIAN))
+				return ret;
+
+			if (seek->seek_upward && (fmdev->rx.region.fm_band == FM_BAND_WEATHER)) {
+				if (fmdev->asic_id < 0x1800) {
+					fmdev->rx.freq = FM_US_BAND_HIGH;
+					return FM_US_BAND_HIGH;
+				}
+
+				return ret;
+			}
+
+			if (seek->seek_upward) {
+				switch (fmdev->rx.region.fm_band) {
+				case FM_BAND_RUSSIAN:
+					curr_band = FM_BAND_JAPAN;
+					break;
+				case FM_BAND_JAPAN:
+					curr_band = FM_BAND_EUROPE_US;
+					break;
+				case FM_BAND_EUROPE_US:
+					curr_band = FM_BAND_WEATHER;
+					break;
+				}
+			} else {
+				switch (fmdev->rx.region.fm_band) {
+				case FM_BAND_WEATHER:
+					curr_band = FM_BAND_EUROPE_US;
+					break;
+				case FM_BAND_EUROPE_US:
+					curr_band = FM_BAND_JAPAN;
+					break;
+				case FM_BAND_JAPAN:
+					curr_band = FM_BAND_RUSSIAN;
+					break;
+				}
+			}
+		} while (1);
+	}
 }
 /* Get modulator attributes. If mode is not TX, return no attributes. */
 static int fm_v4l2_vidioc_g_modulator(struct file *file, void *priv,
@@ -596,6 +665,9 @@ int fm_v4l2_init_video_device(struct fmdev *fmdev, int radio_nr)
 	v4l2_ctrl_new_std(&fmdev->ctrl_handler, &fm_ctrl_ops,
 			V4L2_CID_RDS_TX_RADIO_TEXT, 0, 0xffff, 1, 0);
 
+	v4l2_ctrl_new_std(&fmdev->ctrl_handler, &fm_ctrl_ops,
+			V4L2_CID_RDS_TX_AF_FREQ, 76000, 180000, 1, 87500);
+
 	v4l2_ctrl_new_std_menu(&fmdev->ctrl_handler, &fm_ctrl_ops,
 			V4L2_CID_TUNE_PREEMPHASIS, V4L2_PREEMPHASIS_75_uS,
 			0, V4L2_PREEMPHASIS_75_uS);
@@ -610,6 +682,13 @@ int fm_v4l2_init_video_device(struct fmdev *fmdev, int radio_nr)
 
 	if (ctrl)
 		ctrl->flags |= V4L2_CTRL_FLAG_VOLATILE;
+
+	v4l2_ctrl_new_std(&fmdev->ctrl_handler, &fm_ctrl_ops,
+			V4L2_CID_RDS_AF_SWITCH, 0, 1, 1, 0);
+
+	v4l2_ctrl_new_std_menu(&fmdev->ctrl_handler, &fm_ctrl_ops,
+			V4L2_CID_TUNE_DEEMPHASIS, V4L2_DEEMPHASIS_75_uS,
+			0, V4L2_DEEMPHASIS_75_uS);
 
 	return 0;
 }

@@ -44,20 +44,41 @@
 
 /* Region info */
 static struct region_info region_configs[] = {
+	/* Super set of all bands */
+	{
+	 .chanl_space = FM_CHANNEL_SPACING_200KHZ * FM_FREQ_MUL,
+	 .bot_freq = 65800,	/* 87.5 MHz */
+	 .top_freq = 162550,	/* 108 MHz */
+	 .fm_band = 0,
+	 },
 	/* Europe/US */
 	{
 	 .chanl_space = FM_CHANNEL_SPACING_200KHZ * FM_FREQ_MUL,
 	 .bot_freq = 87500,	/* 87.5 MHz */
 	 .top_freq = 108000,	/* 108 MHz */
-	 .fm_band = 0,
+	 .fm_band = 1,
 	 },
 	/* Japan */
 	{
 	 .chanl_space = FM_CHANNEL_SPACING_200KHZ * FM_FREQ_MUL,
 	 .bot_freq = 76000,	/* 76 MHz */
 	 .top_freq = 90000,	/* 90 MHz */
-	 .fm_band = 1,
+	 .fm_band = 2,
 	 },
+	/* Russian (OIRT) band */
+	{
+	.chanl_space = FM_CHANNEL_SPACING_50KHZ * FM_FREQ_MUL_RUS,
+	.bot_freq = 65800,     /* 65.8 MHz */
+	.top_freq = 74000,     /* 74 MHz */
+	.fm_band = 3,
+	},
+	/* Wether Band */
+	{
+	.chanl_space = FM_CHANNEL_SPACING_50KHZ * FM_FREQ_MUL_WB,
+	.bot_freq = 162400,     /* 162.4 MHz */
+	.top_freq = 162550,     /* 162.55 MHz */
+	.fm_band = 4,
+	}
 };
 
 /* Band selection */
@@ -596,7 +617,6 @@ static void fm_irq_handle_flag_getcmd_resp(struct fmdev *fmdev)
 	memcpy(&fmdev->irq_info.flag, skb->data, fm_evt_hdr->dlen);
 
 	fmdev->irq_info.flag = be16_to_cpu(fmdev->irq_info.flag);
-	fmdbg("irq: flag register(0x%x)\n", fmdev->irq_info.flag);
 
 	/* Continue next function in interrupt handler table */
 	fm_irq_call_stage(fmdev, FM_HW_MAL_FUNC_IDX);
@@ -702,7 +722,7 @@ static void fm_rdsparse_swapbytes(struct fmdev *fmdev,
 	 * in Dolphin they are in big endian, the parsing of the RDS data
 	 * is chip dependent
 	 */
-	if (fmdev->asci_id != 0x6350) {
+	if (fmdev->asic_id != 0x6350) {
 		rds_buff = &rds_format->data.groupdatabuff.buff[0];
 		while (index + 1 < FM_RX_RDS_INFO_FIELD_MAX) {
 			byte1 = rds_buff[index];
@@ -1353,11 +1373,13 @@ static int fm_power_up(struct fmdev *fmdev, u8 mode)
 			sizeof(asic_ver), &asic_ver, &resp_len))
 		goto rel;
 
+	fmdev->asic_id = be16_to_cpu(asic_id);
+
 	fmdbg("ASIC ID: 0x%x , ASIC Version: %d\n",
-		be16_to_cpu(asic_id), be16_to_cpu(asic_ver));
+		fmdev->asic_id, be16_to_cpu(asic_ver));
 
 	sprintf(fw_name, "%s_%x.%d.bts", FM_FMC_FW_FILE_START,
-		be16_to_cpu(asic_id), be16_to_cpu(asic_ver));
+		fmdev->asic_id, be16_to_cpu(asic_ver));
 
 	ret = fm_download_firmware(fmdev, fw_name);
 	if (ret < 0) {
@@ -1366,7 +1388,7 @@ static int fm_power_up(struct fmdev *fmdev, u8 mode)
 	}
 	sprintf(fw_name, "%s_%x.%d.bts", (mode == FM_MODE_RX) ?
 			FM_RX_FW_FILE_START : FM_TX_FW_FILE_START,
-			be16_to_cpu(asic_id), be16_to_cpu(asic_ver));
+			fmdev->asic_id, be16_to_cpu(asic_ver));
 
 	ret = fm_download_firmware(fmdev, fw_name);
 	if (ret < 0) {
@@ -1576,7 +1598,7 @@ int fmc_prepare(struct fmdev *fmdev)
 	fmdev->rx.rds.flag = FM_RDS_DISABLE;
 	fmdev->rx.freq = FM_UNDEFINED_FREQ;
 	fmdev->rx.rds_mode = FM_RDS_SYSTEM_RDS;
-	fmdev->rx.af_mode = FM_RX_RDS_AF_SWITCH_MODE_OFF;
+	fmdev->rx.af_mode = FM_RX_RDS_AF_SWITCH_MODE_ON;
 	fmdev->irq_info.retry = 0;
 
 	fmdev->tx_data.tx_frq = FM_UNDEFINED_FREQ;

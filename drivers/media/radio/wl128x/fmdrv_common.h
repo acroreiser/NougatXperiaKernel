@@ -201,8 +201,24 @@ struct fm_event_msg_hdr {
 #define FM_UNDEFINED_FREQ		   0xFFFFFFFF
 
 /* Band types */
-#define FM_BAND_EUROPE_US	0
-#define FM_BAND_JAPAN		1
+#define FM_BAND_ALL		0
+#define FM_BAND_EUROPE_US	1
+#define FM_BAND_JAPAN		2
+#define FM_BAND_RUSSIAN		3
+#define FM_BAND_WEATHER		4
+
+/* Frequencies */
+#define FM_RUSSIAN_BAND_LOW	65800
+#define FM_RUSSIAN_BAND_HIGH	74000
+
+#define FM_JAPAN_BAND_LOW       76000
+#define FM_JAPAN_BAND_HIGH      90000
+
+#define FM_US_BAND_LOW          87500
+#define FM_US_BAND_HIGH         108000
+
+#define FM_WEATHER_BAND_LOW	162400
+#define FM_WEATHER_BAND_HIGH	162550
 
 /* Seek directions */
 #define FM_SEARCH_DIRECTION_DOWN	0
@@ -213,6 +229,10 @@ struct fm_event_msg_hdr {
 #define FM_TUNER_PRESET_MODE		1
 #define FM_TUNER_AUTONOMOUS_SEARCH_MODE	2
 #define FM_TUNER_AF_JUMP_MODE		3
+#define FM_TUNER_PI_MATCH_MODE		4
+#define FM_TUNER_BULK_SEARCH_MODE	5
+#define FM_TUNER_WRAP_SEARCH_MODE	6
+#define FM_TUNER_WEATHER_MODE		7
 
 /* Min and Max volume */
 #define FM_RX_VOLUME_MIN	0
@@ -353,7 +373,7 @@ struct fm_event_msg_hdr {
  * with this default values after loading RX firmware.
  */
 #define FM_DEFAULT_RX_VOLUME		10
-#define FM_DEFAULT_RSSI_THRESHOLD	20
+#define FM_DEFAULT_RSSI_THRESHOLD	8
 
 /* Range for TX power level in units for dB/uV */
 #define FM_PWR_LVL_LOW			91
@@ -402,6 +422,8 @@ int fmc_get_mode(struct fmdev *, u8 *);
 #define FM_CHANNEL_SPACING_100KHZ 2
 #define FM_CHANNEL_SPACING_200KHZ 4
 #define FM_FREQ_MUL 50
+#define FM_FREQ_MUL_RUS 10
+#define FM_FREQ_MUL_WB 25
 
 #endif
 

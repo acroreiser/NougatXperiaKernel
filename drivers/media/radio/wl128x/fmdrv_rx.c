@@ -51,7 +51,19 @@ int fm_rx_set_freq(struct fmdev *fmdev, u32 freq)
 	u32 resp_len;
 	int ret;
 
-	if (freq < fmdev->rx.region.bot_freq || freq > fmdev->rx.region.top_freq) {
+
+	if (freq >= FM_RUSSIAN_BAND_LOW && freq <= FM_RUSSIAN_BAND_HIGH)
+		fm_rx_set_region(fmdev, FM_BAND_RUSSIAN);
+	else if (freq >= FM_JAPAN_BAND_LOW && freq <= FM_JAPAN_BAND_HIGH)
+		fm_rx_set_region(fmdev, FM_BAND_JAPAN);
+	else if (freq >= FM_US_BAND_LOW && freq <= FM_US_BAND_HIGH)
+		fm_rx_set_region(fmdev, FM_BAND_EUROPE_US);
+	else if (freq >= FM_WEATHER_BAND_LOW && freq <= FM_WEATHER_BAND_HIGH) {
+		if (fmdev->asic_id < 0x1800)
+			return -ERANGE;
+
+		fm_rx_set_region(fmdev, FM_BAND_WEATHER);
+	} else {
 		fmerr("Invalid frequency %d\n", freq);
 		return -EINVAL;
 	}
@@ -72,7 +84,12 @@ int fm_rx_set_freq(struct fmdev *fmdev, u32 freq)
 		return ret;
 
 	/* Calculate frequency index and set*/
-	payload = (freq - fmdev->rx.region.bot_freq) / FM_FREQ_MUL;
+	if (fmdev->rx.region.fm_band == FM_BAND_RUSSIAN)
+		payload = (freq - fmdev->rx.region.bot_freq) / FM_FREQ_MUL_RUS;
+	else if (fmdev->rx.region.fm_band == FM_BAND_WEATHER)
+		payload = (freq - fmdev->rx.region.bot_freq) / FM_FREQ_MUL_WB;
+	else
+		payload = (freq - fmdev->rx.region.bot_freq) / FM_FREQ_MUL;
 
 	ret = fmc_send_cmd(fmdev, FREQ_SET, REG_WR, &payload,
 			sizeof(payload), NULL, NULL);
@@ -117,7 +134,13 @@ int fm_rx_set_freq(struct fmdev *fmdev, u32 freq)
 		goto exit;
 
 	curr_frq = be16_to_cpu(curr_frq);
-	curr_frq_in_khz = (fmdev->rx.region.bot_freq + ((u32)curr_frq * FM_FREQ_MUL));
+
+	if (fmdev->rx.region.fm_band == FM_BAND_RUSSIAN)
+		curr_frq_in_khz = (fmdev->rx.region.bot_freq + ((u32)curr_frq * FM_FREQ_MUL_RUS));
+	else if (fmdev->rx.region.fm_band == FM_BAND_WEATHER)
+		curr_frq_in_khz = (fmdev->rx.region.bot_freq + ((u32)curr_frq * FM_FREQ_MUL_WB));
+	else
+		curr_frq_in_khz = (fmdev->rx.region.bot_freq + ((u32)curr_frq * FM_FREQ_MUL));
 
 	if (curr_frq_in_khz != freq) {
 		pr_info("Frequency is set to (%d) but "
@@ -167,14 +190,21 @@ static int fm_rx_set_channel_spacing(struct fmdev *fmdev, u32 spacing)
 }
 
 int fm_rx_seek(struct fmdev *fmdev, u32 seek_upward,
-		u32 wrap_around, u32 spacing)
+		u32 wrap_around, u32 spacing, u32 fm_band)
 {
 	u32 resp_len;
-	u16 curr_frq, next_frq, last_frq;
+	u16 curr_frq, next_frq, last_frq, fm_frq_mul;
 	u16 payload, int_reason, intr_flag;
 	u16 offset, space_idx;
 	unsigned long timeleft;
 	int ret;
+
+	if (fmdev->rx.region.fm_band != fm_band) {
+		if ((fmdev->asic_id < 0x1800) && (fm_band == FM_BAND_WEATHER))
+			return -ERANGE;
+
+		fm_rx_set_region(fmdev, fm_band);
+	}
 
 	/* Set channel spacing */
 	ret = fm_rx_set_channel_spacing(fmdev, spacing);
@@ -190,10 +220,22 @@ int fm_rx_seek(struct fmdev *fmdev, u32 seek_upward,
 		return ret;
 
 	curr_frq = be16_to_cpu(curr_frq);
-	last_frq = (fmdev->rx.region.top_freq - fmdev->rx.region.bot_freq) / FM_FREQ_MUL;
 
 	/* Check the offset in order to be aligned to the channel spacing*/
-	space_idx = fmdev->rx.region.chanl_space / FM_FREQ_MUL;
+	if (fmdev->rx.region.fm_band == FM_BAND_RUSSIAN) {
+		last_frq = (fmdev->rx.region.top_freq - fmdev->rx.region.bot_freq) / FM_FREQ_MUL_RUS;
+		space_idx = fmdev->rx.region.chanl_space / FM_FREQ_MUL_RUS;
+		fm_frq_mul = FM_FREQ_MUL_RUS;
+	} else if (fmdev->rx.region.fm_band == FM_BAND_WEATHER) {
+		last_frq = (fmdev->rx.region.top_freq - fmdev->rx.region.bot_freq) / FM_FREQ_MUL_WB;
+		space_idx = 1;
+		fm_frq_mul = FM_FREQ_MUL_WB;
+	} else {
+		last_frq = (fmdev->rx.region.top_freq - fmdev->rx.region.bot_freq) / FM_FREQ_MUL;
+		space_idx = fmdev->rx.region.chanl_space / FM_FREQ_MUL;
+		fm_frq_mul = FM_FREQ_MUL;
+	}
+
 	offset = curr_frq % space_idx;
 
 	next_frq = seek_upward ? curr_frq + space_idx /* Seek Up */ :
@@ -238,7 +280,11 @@ again:
 		return ret;
 
 	/* Start seek */
-	payload = FM_TUNER_AUTONOMOUS_SEARCH_MODE;
+	if (fmdev->rx.region.fm_band == FM_BAND_WEATHER)
+		payload = FM_TUNER_WEATHER_MODE;
+	else
+		payload = FM_TUNER_AUTONOMOUS_SEARCH_MODE;
+
 	ret = fmc_send_cmd(fmdev, TUNER_MODE_SET, REG_WR, &payload,
 			sizeof(payload), NULL, NULL);
 	if (ret < 0)
@@ -265,6 +311,7 @@ again:
 		return ret;
 
 	if (int_reason & FM_BL_EVENT) {
+		fmdev->rx.bl_flag = 1;
 		if (wrap_around == 0) {
 			fmdev->rx.freq = seek_upward ?
 				fmdev->rx.region.top_freq :
@@ -274,8 +321,11 @@ again:
 				fmdev->rx.region.bot_freq :
 				fmdev->rx.region.top_freq;
 			/* Calculate frequency index to write */
-			next_frq = (fmdev->rx.freq -
-					fmdev->rx.region.bot_freq) / FM_FREQ_MUL;
+			next_frq = (fmdev->rx.freq - fmdev->rx.region.bot_freq) / fm_frq_mul;
+
+			/* If no valid chanel then report default frequency */
+			wrap_around = 0;
+
 			goto again;
 		}
 	} else {
@@ -286,9 +336,7 @@ again:
 			return ret;
 
 		curr_frq = be16_to_cpu(curr_frq);
-		fmdev->rx.freq = (fmdev->rx.region.bot_freq +
-				((u32)curr_frq * FM_FREQ_MUL));
-
+		fmdev->rx.freq = (fmdev->rx.region.bot_freq + ((u32)curr_frq * fm_frq_mul));
 	}
 	/* Reset RDS cache and current station pointers */
 	fm_rx_reset_rds_cache(fmdev);
@@ -364,18 +412,21 @@ int fm_rx_set_region(struct fmdev *fmdev, u8 region_to_set)
 	int ret;
 
 	if (region_to_set != FM_BAND_EUROPE_US &&
-	    region_to_set != FM_BAND_JAPAN) {
+	    region_to_set != FM_BAND_JAPAN &&
+	    region_to_set != FM_BAND_RUSSIAN &&
+	    region_to_set != FM_BAND_WEATHER) {
 		fmerr("Invalid band\n");
 		return -EINVAL;
 	}
 
 	if (fmdev->rx.region.fm_band == region_to_set) {
-		fmerr("Requested band is already configured\n");
+		fmdbg("Requested band is already configured\n");
 		return 0;
 	}
 
 	/* Send cmd to set the band  */
-	payload = (u16)region_to_set;
+	/* Since 0 indicates super band actual payload should be payload - 1*/
+	payload = (u16)(region_to_set - 1);
 	ret = fmc_send_cmd(fmdev, BAND_SET, REG_WR, &payload,
 			sizeof(payload), NULL, NULL);
 	if (ret < 0)
@@ -636,8 +687,11 @@ int fm_rx_set_deemphasis_mode(struct fmdev *fmdev, u16 mode)
 	if (fmdev->curr_fmmode != FM_MODE_RX)
 		return -EPERM;
 
-	if (mode != FM_RX_EMPHASIS_FILTER_50_USEC &&
-			mode != FM_RX_EMPHASIS_FILTER_75_USEC) {
+	if (mode == V4L2_DEEMPHASIS_DISABLED)
+		return 0;
+
+	if (mode != V4L2_DEEMPHASIS_50_uS &&
+			mode != V4L2_DEEMPHASIS_75_uS) {
 		fmerr("Invalid rx de-emphasis mode (%d)\n", mode);
 		return -EINVAL;
 	}

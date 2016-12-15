@@ -150,6 +150,7 @@ struct fm_rx {
 	struct region_info region;	/* Current selected band */
 	u32 freq;	/* Current RX frquency */
 	u8 mute_mode;	/* Current mute mode */
+	u8 bl_flag;	/* Band limit reached flag */
 	u8 deemphasis_mode; /* Current deemphasis mode */
 	/* RF dependent soft mute mode */
 	u8 rf_depend_mute;
@@ -203,7 +204,7 @@ struct fmtx_data {
 struct fmdev {
 	struct video_device *radio_dev;	/* V4L2 video device pointer */
 	struct snd_card *card;	/* Card which holds FM mixer controls */
-	u16 asci_id;
+	u16 asic_id;
 	spinlock_t rds_buff_lock; /* To protect access to RDS buffer */
 	spinlock_t resp_skb_lock; /* To protect access to received SKB */
 
