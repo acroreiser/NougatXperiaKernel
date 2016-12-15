@@ -51,7 +51,6 @@ static int set_rds_text(struct fmdev *fmdev, u8 *rds_text)
 	u16 payload;
 	int ret;
 
-	*(u16 *)rds_text = cpu_to_be16(*(u16 *)rds_text);
 	ret = fmc_send_cmd(fmdev, RDS_DATA_SET, REG_WR, rds_text,
 			strlen(rds_text), NULL, NULL);
 	if (ret < 0)
@@ -67,31 +66,26 @@ static int set_rds_text(struct fmdev *fmdev, u8 *rds_text)
 	return 0;
 }
 
-int set_rds_picode(struct fmdev *fmdev, u16 pi_val)
+static int set_rds_data_mode(struct fmdev *fmdev, u8 mode)
 {
 	u16 payload;
 	int ret;
 
-	payload = pi_val;
+	/* Setting unique PI TODO: how unique? */
+	payload = (u16)0xcafe;
 	ret = fmc_send_cmd(fmdev, PI_SET, REG_WR, &payload,
 			sizeof(payload), NULL, NULL);
 	if (ret < 0)
 		return ret;
 
-	return 0;
-}
-
-int set_rds_pty(struct fmdev *fmdev, u16 pty)
-{
-	u16 payload;
-	u32 ret;
-
-	payload = pty;
-	ret = fmc_send_cmd(fmdev, PTY, REG_WR, &payload,
+	/* Set decoder id */
+	payload = (u16)0xa;
+	ret = fmc_send_cmd(fmdev, DI_SET, REG_WR, &payload,
 			sizeof(payload), NULL, NULL);
 	if (ret < 0)
 		return ret;
 
+	/* TODO: RDS_MODE_GET? */
 	return 0;
 }
 
@@ -107,6 +101,7 @@ static int set_rds_len(struct fmdev *fmdev, u8 type, u16 len)
 	if (ret < 0)
 		return ret;
 
+	/* TODO: LENGTH_GET? */
 	return 0;
 }
 
@@ -114,17 +109,20 @@ int fm_tx_set_rds_mode(struct fmdev *fmdev, u8 rds_en_dis)
 {
 	u16 payload;
 	int ret;
-	u8 rds_text[] = "WL12XX Radio\n";
+	u8 rds_text[] = "Zoom2\n";
 
 	fmdbg("rds_en_dis:%d(E:%d, D:%d)\n", rds_en_dis,
 		   FM_RDS_ENABLE, FM_RDS_DISABLE);
 
 	if (rds_en_dis == FM_RDS_ENABLE) {
 		/* Set RDS length */
-		set_rds_len(fmdev, 2, strlen(rds_text));
+		set_rds_len(fmdev, 0, strlen(rds_text));
 
 		/* Set RDS text */
 		set_rds_text(fmdev, rds_text);
+
+		/* Set RDS mode */
+		set_rds_data_mode(fmdev, 0x0);
 	}
 
 	/* Send command to enable RDS */
@@ -138,6 +136,13 @@ int fm_tx_set_rds_mode(struct fmdev *fmdev, u8 rds_en_dis)
 	if (ret < 0)
 		return ret;
 
+	if (rds_en_dis == FM_RDS_ENABLE) {
+		/* Set RDS length */
+		set_rds_len(fmdev, 0, strlen(rds_text));
+
+		/* Set RDS text */
+		set_rds_text(fmdev, rds_text);
+	}
 	fmdev->tx_data.rds.flag = rds_en_dis;
 
 	return 0;
@@ -151,12 +156,16 @@ int fm_tx_set_radio_text(struct fmdev *fmdev, u8 *rds_text, u8 rds_type)
 	if (fmdev->curr_fmmode != FM_MODE_TX)
 		return -EPERM;
 
+	fm_tx_set_rds_mode(fmdev, 0);
 
 	/* Set RDS length */
 	set_rds_len(fmdev, rds_type, strlen(rds_text));
 
 	/* Set RDS text */
 	set_rds_text(fmdev, rds_text);
+
+	/* Set RDS mode */
+	set_rds_data_mode(fmdev, 0x0);
 
 	payload = 1;
 	ret = fmc_send_cmd(fmdev, RDS_DATA_ENB, REG_WR, &payload,
@@ -177,10 +186,9 @@ int fm_tx_set_af(struct fmdev *fmdev, u32 af)
 
 	fmdbg("AF: %d\n", af);
 
-	fmdev->tx_data.af_frq = af;
-	af = (af - FM_US_BAND_LOW) / FM_KHZ;
+	af = (af - 87500) / 100;
 	payload = (u16)af;
-	ret = fmc_send_cmd(fmdev, AF, REG_WR, &payload,
+	ret = fmc_send_cmd(fmdev, TA_SET, REG_WR, &payload,
 			sizeof(payload), NULL, NULL);
 	if (ret < 0)
 		return ret;
@@ -412,8 +420,6 @@ int fm_tx_set_freq(struct fmdev *fmdev, u32 freq_to_set)
 
 	tx->aud_mode = FM_STEREO_MODE;
 	tx->rds.flag = FM_RDS_DISABLE;
-
-	tx->tx_frq = freq_to_set * 1000; /* in KHz */
 
 	return 0;
 }
