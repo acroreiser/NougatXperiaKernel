@@ -107,6 +107,7 @@ module_param_named(modem_wait, msm_rmnet_modem_wait,
 
 /* Forward declaration */
 static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd);
+static int rmnet_stop(struct net_device *dev);
 
 static int count_this_packet(void *_hdr, int len)
 {
@@ -281,8 +282,7 @@ static void smd_net_data_handler(unsigned long arg)
 			pr_err("[%s] rmnet_recv() cannot allocate skb\n",
 			       dev->name);
 			/* out of memory, reschedule a later attempt */
-			smd_net_data_tasklet.data = (unsigned long)dev;
-			tasklet_schedule(&smd_net_data_tasklet);
+			rmnet_stop(dev);
 			break;
 		} else {
 			skb->dev = dev;
